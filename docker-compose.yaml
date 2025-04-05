@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  ### === Plane ===
+  plane-db:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_DB: plane
+      POSTGRES_USER: plane
+      POSTGRES_PASSWORD: plane
+    volumes:
+      - plane-db-data:/var/lib/postgresql/data
+    networks:
+      - plane-network
+
+  plane-redis:
+    image: redis:7
+    restart: always
+    networks:
+      - plane-network
+
+  plane:
+    image: makeplane/plane:latest
+    restart: always
+    depends_on:
+      - plane-db
+      - plane-redis
+    environment:
+      DATABASE_URL: postgres://plane:plane@plane-db:5432/plane
+      REDIS_URL: redis://plane-redis:6379
+      SECRET_KEY: your_secret_key_here
+      DJANGO_SETTINGS_MODULE: plane.settings.production
+    ports:
+      - "8000:8000"
+    networks:
+      - plane-network
+
+  ### === GitLab ===
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    restart: always
+    hostname: 'gitlab.local'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.local'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+    ports:
+      - '80:80'
+      - '443:443'
+      - '2222:22'
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    networks:
+      - gitlab-network
+
+  ### === n8n ===
+  n8n:
+    image: n8nio/n8n:latest
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=your_username
+      - N8N_BASIC_AUTH_PASSWORD=your_password
+      - N8N_HOST=n8n.local
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - n8n-network
+
+networks:
+  plane-network:
+    driver: bridge
+  gitlab-network:
+    driver: bridge
+  n8n-network:
+    driver: bridge
+
+volumes:
+  plane-db-data:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+  n8n-data:
